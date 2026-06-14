@@ -7,9 +7,12 @@ isolation. DB-backed charging is layered on top in later tasks.
 
 from __future__ import annotations
 
+import io
 from datetime import datetime
+from typing import Any
 from zoneinfo import ZoneInfo
 
+from pypdf import PdfReader
 from sqlmodel import Session
 
 from app.billing.constants import (
@@ -17,7 +20,11 @@ from app.billing.constants import (
     PRICE_PER_PAGE_VND,
     VN_TIMEZONE,
 )
-from app.billing.crud import get_or_create_monthly_usage, increment_monthly_usage
+from app.billing.crud import (
+    get_monthly_usage,
+    get_or_create_monthly_usage,
+    increment_monthly_usage,
+)
 from app.files.models import FileJob
 from app.topup import crud as topup_crud
 from app.topup.models import TopupStatus, TopupTransaction, TopupType
@@ -98,3 +105,44 @@ def charge_for_job(
     if txn is not None:
         session.refresh(txn)
     return txn
+
+
+def estimate_pdf_pages(data: bytes) -> int | None:
+    """Best-effort PDF page count, or ``None`` when the bytes aren't a readable PDF."""
+    try:
+        return len(PdfReader(io.BytesIO(data)).pages)
+    except Exception:
+        return None
+
+
+def preflight_overage_block(
+    session: Session, *, user: User, file_bytes: bytes, content_type: str
+) -> dict[str, Any] | None:
+    """Pre-flight affordability check run before the file is sent to the OCR API.
+
+    Estimates the PDF's pages and, if the projected overage cost exceeds the user's
+    prepaid balance, returns a 402 detail payload so the upload can be rejected before
+    incurring external OCR cost. Returns ``None`` (allow) for non-PDF/uncountable
+    uploads or when the job fits within the free quota + balance.
+    """
+    if "pdf" not in (content_type or "").lower():
+        return None
+    pages = estimate_pdf_pages(file_bytes)
+    if pages is None:
+        return None
+
+    usage = get_monthly_usage(session, user_id=user.id, year_month=current_year_month())
+    pages_used = usage.pages_used if usage else 0
+    cost = chargeable_cost_vnd(compute_chargeable_pages(pages_used, pages))
+    if cost == 0:
+        return None
+
+    balance = topup_crud.get_or_create_balance(session, user.id)
+    if cost > balance.balance:
+        return {
+            "message": "Insufficient balance for the estimated overage. Please top up.",
+            "estimated_pages": pages,
+            "estimated_cost_vnd": cost,
+            "balance_vnd": balance.balance,
+        }
+    return None

@@ -10,6 +10,18 @@ from app.billing.models import MonthlyUsage
 from app.utils import get_datetime_utc
 
 
+def get_monthly_usage(
+    session: Session, *, user_id: uuid.UUID, year_month: int
+) -> MonthlyUsage | None:
+    """Return the usage row for ``(user_id, year_month)`` without creating one."""
+    return session.exec(
+        select(MonthlyUsage).where(
+            MonthlyUsage.user_id == user_id,
+            MonthlyUsage.year_month == year_month,
+        )
+    ).first()
+
+
 def get_or_create_monthly_usage(
     session: Session, *, user_id: uuid.UUID, year_month: int
 ) -> MonthlyUsage:

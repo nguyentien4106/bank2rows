@@ -6,6 +6,7 @@ from sqlmodel import select
 
 from app.aws.client import upload_file_to_r2
 from app.backend_pre_start import logger
+from app.billing.service import preflight_overage_block
 from app.files.crud import (
     create_file,
     delete_file,
@@ -51,7 +52,9 @@ def analyze_transactions_endpoint(
     if not file:
         raise HTTPException(status_code=404, detail="File not found")
     if file.user_id != user.id:
-        raise HTTPException(status_code=403, detail="Not authorized to access this file")
+        raise HTTPException(
+            status_code=403, detail="Not authorized to access this file"
+        )
 
     file_job = get_file_job_by_file_id(session=session, file_id=file_id)
     if not file_job or file_job.state != OcrJobStatus.DONE:
@@ -89,6 +92,7 @@ def list_ocr_models():
     """List the OCR models a user can choose from when parsing a document."""
     return sorted(OcrModel.ALL)
 
+
 @router.post("/", response_model=FilePublic)
 def upload_file_endpoint(
     session: SessionDep,
@@ -111,32 +115,54 @@ def upload_file_endpoint(
     file_bytes = file.file.read()
     file_name = file.filename or "upload"
     file_type = file.content_type or "application/octet-stream"
-    file_create = FileCreate(filename=file_name, content_type=file_type, size=len(file_bytes), url="")
+
+    # Pre-flight: reject before paying for OCR if the estimated overage is unaffordable.
+    block = preflight_overage_block(
+        session, user=user, file_bytes=file_bytes, content_type=file_type
+    )
+    if block is not None:
+        raise HTTPException(status_code=402, detail=block)
+
+    file_create = FileCreate(
+        filename=file_name, content_type=file_type, size=len(file_bytes), url=""
+    )
     file_result = create_file(session=session, file_in=file_create, user_id=user.id)
     key = user.email + "/" + str(file_result.id) + "/" + file_name
 
     try:
-         # upload to r2
+        # upload to r2
         r2_result = upload_file_to_r2(
             key=key,  # Use DB record ID for unique key
             data=file_bytes,
             content_type=file.content_type,
-            presign=True
+            presign=True,
         )
 
-    # enqueue OCR job
+        # enqueue OCR job
         if not r2_result.get("IsSuccess"):
-            delete_file(session=session, file_id=file_result.id)  # Clean up DB record on failure
+            delete_file(
+                session=session, file_id=file_result.id
+            )  # Clean up DB record on failure
             raise HTTPException(status_code=500, detail="Failed to upload file to R2")
 
-        logger.info(f"File {file_result.id} uploaded to R2 successfully, URL: {r2_result['PresignedURL']}")
-        post_ocr_jobs(session=session, file=file_result, file_url=r2_result["PresignedURL"], model=model)
+        logger.info(
+            f"File {file_result.id} uploaded to R2 successfully, URL: {r2_result['PresignedURL']}"
+        )
+        post_ocr_jobs(
+            session=session,
+            file=file_result,
+            file_url=r2_result["PresignedURL"],
+            model=model,
+        )
 
         return file_result
     except Exception as exc:
-        delete_file(session=session, file_id=file_result.id)  # Clean up DB record on failure
+        delete_file(
+            session=session, file_id=file_result.id
+        )  # Clean up DB record on failure
         logger.error(f"Error handling uploaded file {file_name}: {exc}")
         raise HTTPException(status_code=500, detail=str(exc))
+
 
 @router.put("/{file_id}", response_model=FileJobPublic)
 def update_file_job_status_endpoint(
@@ -153,6 +179,7 @@ def update_file_job_status_endpoint(
     updated = update_file_job(session=session, file_job=file_job, state=job_status)
     return updated
 
+
 @router.get("/{file_id}/status", response_model=FileJobPublic)
 def get_file_status(file_id: uuid.UUID, session: SessionDep, user: CurrentUser):
     """
@@ -162,12 +189,15 @@ def get_file_status(file_id: uuid.UUID, session: SessionDep, user: CurrentUser):
     if not file:
         raise HTTPException(status_code=404, detail="File not found")
 
-    get_ocr_job_status(file=file, session=session, user=user)  # Poll & persist latest state
+    get_ocr_job_status(
+        file=file, session=session, user=user
+    )  # Poll & persist latest state
 
     file_job = get_file_job_by_file_id(session=session, file_id=file_id)
     if not file_job:
         raise HTTPException(status_code=404, detail="No job found for this file")
     return file_job
+
 
 @router.get("/{file_id}/job", response_model=FileJobPublic)
 def get_file_job(file_id: uuid.UUID, session: SessionDep, user: CurrentUser):
@@ -178,7 +208,9 @@ def get_file_job(file_id: uuid.UUID, session: SessionDep, user: CurrentUser):
     if not file:
         raise HTTPException(status_code=404, detail="File not found")
     if file.user_id != user.id:
-        raise HTTPException(status_code=403, detail="Not authorized to access this file")
+        raise HTTPException(
+            status_code=403, detail="Not authorized to access this file"
+        )
 
     file_job: FileJob | None = get_file_job_by_file_id(session=session, file_id=file_id)
     if not file_job:
@@ -186,16 +218,24 @@ def get_file_job(file_id: uuid.UUID, session: SessionDep, user: CurrentUser):
     return file_job
 
 
-@router.get('/', response_model=list[FileWithJobPublic])
+@router.get("/", response_model=list[FileWithJobPublic])
 def list_files(session: SessionDep, user: CurrentUser, skip: int = 0, limit: int = 0):
     """
     List all files uploaded by the current user, each enriched with its FileJob.
     """
     user_id = user.id
     if limit <= 0:
-        statement = select(File).where(File.user_id == user_id).order_by(desc(File.created_at))  # ty:ignore[invalid-argument-type]
+        statement = (
+            select(File).where(File.user_id == user_id).order_by(desc(File.created_at))
+        )  # ty:ignore[invalid-argument-type]
     else:
-        statement = select(File).where(File.user_id == user_id).order_by(desc(File.created_at)).offset(skip).limit(limit)  # ty:ignore[invalid-argument-type]
+        statement = (
+            select(File)
+            .where(File.user_id == user_id)
+            .order_by(desc(File.created_at))
+            .offset(skip)
+            .limit(limit)
+        )  # ty:ignore[invalid-argument-type]
 
     files = session.exec(statement).all()
 
@@ -211,13 +251,21 @@ def list_files(session: SessionDep, user: CurrentUser, skip: int = 0, limit: int
             except Exception as exc:
                 logger.error(f"Error refreshing OCR status for file {f.id}: {exc}")
 
-        job_public: FileJobPublic | None = FileJobPublic.model_validate(file_job) if file_job else None
+        job_public: FileJobPublic | None = (
+            FileJobPublic.model_validate(file_job) if file_job else None
+        )
         result.append(FileWithJobPublic.model_validate(f, update={"job": job_public}))
 
     return result
 
+
 @router.post("/{file_id}/download", response_class=Response)
-def download_table_excel_file(file_id: uuid.UUID, type: str, session: SessionDep, user: CurrentUser,):
+def download_table_excel_file(
+    file_id: uuid.UUID,
+    type: str,
+    session: SessionDep,
+    user: CurrentUser,
+):
     """
     Stream an Excel file built from the OCR result JSON stored in R2.
     """
@@ -226,15 +274,21 @@ def download_table_excel_file(file_id: uuid.UUID, type: str, session: SessionDep
         raise HTTPException(status_code=404, detail="File not found")
 
     if file.user_id != user.id:
-        raise HTTPException(status_code=403, detail="Not authorized to access this file")
+        raise HTTPException(
+            status_code=403, detail="Not authorized to access this file"
+        )
 
     file_job = get_file_job_by_file_id(session=session, file_id=file_id)
 
     if not file_job or file_job.state != "done":
         raise HTTPException(status_code=400, detail="OCR job is not done yet")
 
-    logger.info(f"Preparing to stream file {file_id} for user {user.email} with requested type {type}")
-    excel_bytes, content_disposition = download_file(session=session, file=file, type=type)
+    logger.info(
+        f"Preparing to stream file {file_id} for user {user.email} with requested type {type}"
+    )
+    excel_bytes, content_disposition = download_file(
+        session=session, file=file, type=type
+    )
     media_type = {
         "xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         "csv": "text/csv",
@@ -250,7 +304,9 @@ def download_table_excel_file(file_id: uuid.UUID, type: str, session: SessionDep
 
 
 @router.post("/{file_id}/download/analyze-transactions", response_class=Response)
-def download_ai_version_excel(file_id: uuid.UUID, session: SessionDep, user: CurrentUser):
+def download_ai_version_excel(
+    file_id: uuid.UUID, session: SessionDep, user: CurrentUser
+):
     """
     Generate and return a new version of the Excel file created by the standard
     download endpoint. This will fetch the existing generated Excel bytes, write
@@ -261,12 +317,16 @@ def download_ai_version_excel(file_id: uuid.UUID, session: SessionDep, user: Cur
     if not file:
         raise HTTPException(status_code=404, detail="File not found")
     if file.user_id != user.id:
-        raise HTTPException(status_code=403, detail="Not authorized to access this file")
+        raise HTTPException(
+            status_code=403, detail="Not authorized to access this file"
+        )
     file_job = get_file_job_by_file_id(session=session, file_id=file_id)
     if not file_job or file_job.state != "done":
         raise HTTPException(status_code=400, detail="OCR job is not done yet")
     try:
-        ex_bytes, content_disposition = download_file_with_ai(session=session, file=file, user=user)
+        ex_bytes, content_disposition = download_file_with_ai(
+            session=session, file=file, user=user
+        )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -275,6 +335,7 @@ def download_ai_version_excel(file_id: uuid.UUID, session: SessionDep, user: Cur
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         headers={"Content-Disposition": content_disposition},
     )
+
 
 @router.post("/batch/status", response_model=list[FileJobPublic])
 def get_files_batch_status(
@@ -292,7 +353,9 @@ def get_files_batch_status(
         if not file:
             raise HTTPException(status_code=404, detail=f"File {file_id} not found")
         if file.user_id != user.id:
-            raise HTTPException(status_code=403, detail=f"Not authorized to access file {file_id}")
+            raise HTTPException(
+                status_code=403, detail=f"Not authorized to access file {file_id}"
+            )
 
         try:
             get_ocr_job_status(file=file, session=session, user=user)
@@ -305,6 +368,7 @@ def get_files_batch_status(
 
     return file_jobs
 
+
 @router.get("/{file_id}/preview", response_model=FilePreviewResponse)
 def preview_file_result(file_id: uuid.UUID, session: SessionDep, user: CurrentUser):
     """
@@ -316,19 +380,25 @@ def preview_file_result(file_id: uuid.UUID, session: SessionDep, user: CurrentUs
     if not file:
         raise HTTPException(status_code=404, detail="File not found")
     if file.user_id != user.id:
-        raise HTTPException(status_code=403, detail="Not authorized to access this file")
+        raise HTTPException(
+            status_code=403, detail="Not authorized to access this file"
+        )
 
     file_job = get_file_job_by_file_id(session=session, file_id=file_id)
     if not file_job or file_job.state != OcrJobStatus.DONE:
         raise HTTPException(status_code=400, detail="OCR job is not done yet")
     if not file_job.json_url:
-        raise HTTPException(status_code=400, detail="No result data available for this file")
+        raise HTTPException(
+            status_code=400, detail="No result data available for this file"
+        )
 
     try:
         columns, rows = get_preview_data(file_job)
     except Exception as exc:
         logger.error("Failed to fetch OCR preview for file %s: %s", file_id, exc)
-        raise HTTPException(status_code=502, detail="Failed to load result data") from exc
+        raise HTTPException(
+            status_code=502, detail="Failed to load result data"
+        ) from exc
 
     return FilePreviewResponse(
         file_id=file.id,
