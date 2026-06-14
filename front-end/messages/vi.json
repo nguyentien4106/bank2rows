@@ -260,7 +260,8 @@
     "remove": "Gỡ bỏ",
     "model": "Mô hình phân tích",
     "badgeNew": "Mới",
-    "badgeOffline": "Sắp offline"
+    "badgeOffline": "Sắp offline",
+    "insufficientBalance": "Số dư không đủ — vui lòng nạp tiền để xử lý tài liệu này."
   },
   "settings": {
     "parsingTitle": "Phân tích",
@@ -369,5 +370,13 @@
     "passwordSaved": "Đã cập nhật mật khẩu.",
     "recentTitle": "Tài liệu gần đây",
     "recentSub": "Các công việc phân tích mới nhất của bạn."
+  },
+  "usage": {
+    "title": "Mức dùng trong tháng",
+    "freeLeft": "Còn {count} trang miễn phí",
+    "freeUsed": "Đã dùng {used}/{total} trang miễn phí trong tháng",
+    "balance": "Số dư",
+    "pricePerPage": "{price} ₫ / trang sau hạn mức miễn phí",
+    "loadError": "Không tải được dữ liệu sử dụng."
   }
 }

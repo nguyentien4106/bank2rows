@@ -179,6 +179,17 @@ export type UpdatePassword = {
     new_password: string;
 };
 
+/**
+ * Current-month metering summary for the authenticated user.
+ */
+export type UsageResponse = {
+    year_month: number;
+    pages_used: number;
+    free_pages_remaining: number;
+    price_per_page_vnd: number;
+    balance_vnd: number;
+};
+
 export type UserBalancePublic = {
     user_id: string;
     balance: number;
@@ -266,6 +277,14 @@ export type ApiKeysDeleteApiKeyData = {
 };
 
 export type ApiKeysDeleteApiKeyResponse = (unknown);
+
+export type BillingGetUsageResponse = (UsageResponse);
+
+export type FilesAnalyzeTransactionsEndpointData = {
+    fileId: string;
+};
+
+export type FilesAnalyzeTransactionsEndpointResponse = (unknown);
 
 export type FilesListOcrModelsResponse = (Array<(string)>);
 

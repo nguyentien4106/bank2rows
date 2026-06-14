@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Download, FileText, RefreshCw, Sparkles, UploadCloud, X } from "lucide-react";
 import { useTranslations } from "next-intl";
-import { apiMessage } from "@/lib/api";
+import { apiMessage, apiStatus } from "@/lib/api";
 import { FilesService } from "@/lib/client";
 import { DEFAULT_OCR_MODEL, OCR_MODELS } from "@/constants/ocr";
 import { downloadExport, jobProgress, jobStatus } from "@/lib/files";
@@ -122,7 +122,9 @@ export default function UploadView() {
           const uploaded = await FilesService.uploadFileEndpoint({ formData: { file: f.file, model } });
           patch(f.uid, { status: "parsing", fileId: uploaded.id, progress: 5 });
         } catch (err) {
-          patch(f.uid, { status: "error", error: apiMessage(err) });
+          const error =
+            apiStatus(err) === 402 ? t("insufficientBalance") : apiMessage(err);
+          patch(f.uid, { status: "error", error });
         }
       }),
     );

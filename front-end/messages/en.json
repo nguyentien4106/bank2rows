@@ -260,7 +260,8 @@
     "remove": "Remove",
     "model": "Parsing model",
     "badgeNew": "New",
-    "badgeOffline": "Offline soon"
+    "badgeOffline": "Offline soon",
+    "insufficientBalance": "Insufficient balance — top up to parse this document."
   },
   "settings": {
     "parsingTitle": "Parsing",
@@ -369,5 +370,13 @@
     "passwordSaved": "Password updated.",
     "recentTitle": "Recent documents",
     "recentSub": "Your latest parse jobs."
+  },
+  "usage": {
+    "title": "Monthly Usage",
+    "freeLeft": "{count} free pages left",
+    "freeUsed": "{used} of {total} free pages used this month",
+    "balance": "Balance",
+    "pricePerPage": "{price} ₫ / page after the free quota",
+    "loadError": "Could not load usage."
   }
 }

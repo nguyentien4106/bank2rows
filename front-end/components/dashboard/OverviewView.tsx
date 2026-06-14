@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
 import StatCards from "@/components/dashboard/StatCards";
+import UsageWidget from "@/components/dashboard/UsageWidget";
 import ParseChart from "@/components/dashboard/ParseChart";
 import ActivityFeed from "@/components/dashboard/ActivityFeed";
 import { apiMessage } from "@/lib/api";
@@ -66,6 +67,7 @@ export default function OverviewView() {
     <div>
       {error && <div className="field-error">{error}</div>}
       <StatCards stat={stat} />
+      <UsageWidget />
       <div className="ov-grid">
         <div className="panel">
           <div className="panel-head">

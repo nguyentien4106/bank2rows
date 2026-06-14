@@ -34,8 +34,18 @@ export function apiMessage(err: unknown): string {
       const msg = (detail[0] as { msg?: unknown } | undefined)?.msg;
       if (typeof msg === "string") return msg;
     }
+    // Structured detail (e.g. the billing 402 payload) carries its own message.
+    if (detail && typeof detail === "object") {
+      const msg = (detail as { message?: unknown }).message;
+      if (typeof msg === "string") return msg;
+    }
     return err.message;
   }
   if (err instanceof Error) return err.message;
   return String(err);
+}
+
+/** HTTP status code of an SDK error, or `undefined` for non-API errors. */
+export function apiStatus(err: unknown): number | undefined {
+  return err instanceof ApiError ? err.status : undefined;
 }

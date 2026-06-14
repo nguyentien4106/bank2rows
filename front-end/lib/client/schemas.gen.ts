@@ -821,6 +821,35 @@ export const UpdatePasswordSchema = {
     title: 'UpdatePassword'
 } as const;
 
+export const UsageResponseSchema = {
+    properties: {
+        year_month: {
+            type: 'integer',
+            title: 'Year Month'
+        },
+        pages_used: {
+            type: 'integer',
+            title: 'Pages Used'
+        },
+        free_pages_remaining: {
+            type: 'integer',
+            title: 'Free Pages Remaining'
+        },
+        price_per_page_vnd: {
+            type: 'integer',
+            title: 'Price Per Page Vnd'
+        },
+        balance_vnd: {
+            type: 'number',
+            title: 'Balance Vnd'
+        }
+    },
+    type: 'object',
+    required: ['year_month', 'pages_used', 'free_pages_remaining', 'price_per_page_vnd', 'balance_vnd'],
+    title: 'UsageResponse',
+    description: 'Current-month metering summary for the authenticated user.'
+} as const;
+
 export const UserBalancePublicSchema = {
     properties: {
         user_id: {
