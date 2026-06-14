@@ -23,18 +23,66 @@ from app.files.schemas import (
     FileWithJobPublic,
 )
 from app.files.service import (
+    GeminiApiError,
+    GeminiResponseParseError,
+    analyze_transactions_for_file,
     download_file,
     download_file_with_ai,
-    get_preview_data
+    get_preview_data,
 )
+from app.files.strategies import DOWNLOAD_STRATEGIES
 from app.ocrs.constants import OcrJobStatus, OcrModel
 from app.ocrs.service import (
-    fetch_ocr_table_pages,
     get_ocr_job_status,
     post_ocr_jobs,
 )
 
 router = APIRouter(prefix="/files", tags=["files"])
+
+
+@router.post("/{file_id}/download/ai", response_class=Response)
+def analyze_transactions_endpoint(
+    file_id: uuid.UUID, session: SessionDep, user: CurrentUser
+):
+    """Classify the transactions in a file's OCR result into accounting codes
+    (Thông tư 200/2014/TT-BTC) using the configured Gemini API key and stream the
+    merged table back as an Excel (.xlsx) file."""
+    file = session.get(File, file_id)
+    if not file:
+        raise HTTPException(status_code=404, detail="File not found")
+    if file.user_id != user.id:
+        raise HTTPException(status_code=403, detail="Not authorized to access this file")
+
+    file_job = get_file_job_by_file_id(session=session, file_id=file_id)
+    if not file_job or file_job.state != OcrJobStatus.DONE:
+        raise HTTPException(status_code=400, detail="OCR job is not done yet")
+
+    try:
+        tx_df = analyze_transactions_for_file(session=session, file=file, user=user)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except GeminiResponseParseError as exc:
+        raise HTTPException(
+            status_code=422, detail=f"Invalid JSON returned by Gemini: {exc}"
+        ) from exc
+    except GeminiApiError as exc:
+        raise HTTPException(
+            status_code=502, detail=f"Gemini API call failed: {exc}"
+        ) from exc
+
+    safe_name = (
+        file.filename.rsplit(".", 1)[0] if "." in file.filename else file.filename
+    )
+    excel_bytes, content_disposition = DOWNLOAD_STRATEGIES["xlsx"].convert(
+        tx_df, f"{safe_name}_transactions.xlsx"
+    )
+
+    return Response(
+        content=excel_bytes,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": content_disposition},
+    )
+
 
 @router.get("/models", response_model=list[str])
 def list_ocr_models():
@@ -201,7 +249,7 @@ def download_table_excel_file(file_id: uuid.UUID, type: str, session: SessionDep
     )
 
 
-@router.post("/{file_id}/download/ai", response_class=Response)
+@router.post("/{file_id}/download/analyze-transactions", response_class=Response)
 def download_ai_version_excel(file_id: uuid.UUID, session: SessionDep, user: CurrentUser):
     """
     Generate and return a new version of the Excel file created by the standard

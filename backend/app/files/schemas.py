@@ -79,3 +79,19 @@ class FilePreviewResponse(SQLModel):
     rows: list[dict[str, Any]]
     row_count: int
     markdown_url: str | None = None
+
+
+# ---------------------------------------------------------------------------
+# Transaction classification schemas
+# ---------------------------------------------------------------------------
+
+class TransactionResult(SQLModel):
+    """A single classified transaction (Thông tư 200/2014/TT-BTC)."""
+    description: str
+    account_code: str
+    account_name: str
+
+
+class TransactionResponse(SQLModel):
+    """Classification results for a batch of transactions."""
+    results: list[TransactionResult]

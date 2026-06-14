@@ -3,6 +3,7 @@ import json
 from io import StringIO
 from typing import Any
 
+import httpx
 import pandas as pd
 from google import genai
 from pandas.core.frame import DataFrame
@@ -149,10 +150,11 @@ def download_file_with_ai(session: Session, file: File, user: CurrentUser) -> tu
     if df is None:
         raise ValueError("No tables found in OCR result.")
     file_text = df.to_csv(index=False)
-
     full_prompt = user_instruction + "---FILE-BEGIN---\n" + file_text + "\n---FILE-END---\n"
+    print("File text extracted for AI processing:", full_prompt)  # debug log first 500 chars
     response = client.models.generate_content(model=model, contents=full_prompt)
     resp_text = response.text or ""
+    print("AI response:", resp_text[:500])  # debug log first 500 chars
 
     df_out = pd.read_csv(StringIO(resp_text))
     output = io.BytesIO()
@@ -160,3 +162,179 @@ def download_file_with_ai(session: Session, file: File, user: CurrentUser) -> tu
         df_out.to_excel(writer, index=False, sheet_name="OCR Tables with Account Codes")
 
     return output.getvalue(), DOWNLOAD_STRATEGIES["xlsx"].get_content_disposition(f"{file.filename.rsplit('.', 1)[0]}_with_account_codes.xlsx")
+
+
+# ---------------------------------------------------------------------------
+# Bank-statement transaction classification (Gemini REST)
+# ---------------------------------------------------------------------------
+
+TRANSACTION_MODEL = "gemini-2.5-flash"
+TRANSACTION_GENERATE_URL = (
+    "https://generativelanguage.googleapis.com/v1beta/models/"
+    f"{TRANSACTION_MODEL}:generateContent?key={{api_key}}"
+)
+
+TRANSACTION_SYSTEM_PROMPT = """
+Bạn là chuyên gia kế toán Việt Nam, thành thạo Hệ thống tài khoản kế toán theo Thông tư 200/2014/TT-BTC.
+
+Nhiệm vụ: Phân tích danh sách mô tả giao dịch ngân hàng và xác định mã tài khoản kế toán phù hợp cho từng giao dịch.
+
+Với danh sách giao dịch được cung cấp, hãy trả về JSON array với format sau:
+[
+  {
+    "description": "mô tả giao dịch gốc, giữ nguyên không thay đổi",
+    "account_code": "mã tài khoản (ví dụ: 112, 331, 511...) hoặc null nếu không chắc",
+    "account_name": "tên tài khoản tiếng Việt hoặc null nếu không chắc"
+  }
+]
+
+Quy tắc bắt buộc:
+- Chỉ trả về JSON array thuần túy, không markdown, không giải thích, không backtick
+- Số lượng phần tử trong mảng phải bằng đúng số lượng giao dịch đầu vào
+- Giá trị "description" phải giữ nguyên 100% nội dung gốc, không sửa, không dịch
+- Chỉ điền account_code khi chắc chắn có thể suy ra từ nội dung mô tả
+- Nếu mô tả quá chung chung, mơ hồ, hoặc không đủ thông tin để xác định
+  → để account_code: "" và account_name: ""
+- Không được đoán mò hoặc điền tài khoản khi không có căn cứ rõ ràng
+
+Ví dụ nên điền:
+- "Thanh toan tien dien thang 6 cong ty EVN" → 642, Chi phí quản lý doanh nghiệp
+- "Tra luong nhan vien thang 6" → 334, Phải trả người lao động
+- "Thu tien hang khach ABC" → 131, Phải thu khách hàng
+
+Ví dụ nên để null:
+- "CK den 9704366789" → null (không rõ mục đích chuyển khoản)
+- "GD thanh cong" → null (quá chung chung)
+- "REF 20240601" → null (chỉ là mã tham chiếu)
+
+Các tài khoản phổ biến:
+- 111: Tiền mặt
+- 112: Tiền gửi ngân hàng
+- 131: Phải thu khách hàng
+- 331: Phải trả người bán
+- 333: Thuế và các khoản phải nộp nhà nước
+- 334: Phải trả người lao động
+- 511: Doanh thu bán hàng và cung cấp dịch vụ
+- 515: Doanh thu hoạt động tài chính
+- 621/622/627: Chi phí sản xuất
+- 641: Chi phí bán hàng
+- 642: Chi phí quản lý doanh nghiệp
+- 635: Chi phí tài chính
+- 411: Vốn đầu tư của chủ sở hữu
+- 341: Vay và nợ thuê tài chính
+"""
+
+
+class GeminiApiError(Exception):
+    """Raised when the Gemini API call fails (network/HTTP/unexpected payload)."""
+
+
+class GeminiResponseParseError(Exception):
+    """Raised when the Gemini response text is not valid JSON."""
+
+
+def analyze_transactions(api_key: str, transactions: list[str]) -> list[dict[str, Any]]:
+    """Classify bank-statement transaction descriptions into accounting codes.
+
+    Sends ``transactions`` to ``TRANSACTION_MODEL`` via the REST generateContent
+    endpoint using ``TRANSACTION_SYSTEM_PROMPT``. The prompt asks the model to
+    return a JSON array of ``{account_code, account_name}`` objects, one per input
+    transaction and in the same order. Returns that parsed array unchanged.
+
+    Raises:
+        GeminiApiError: the API call failed or returned an unexpected payload.
+        GeminiResponseParseError: the model's text was not a valid JSON array.
+    """
+    url = TRANSACTION_GENERATE_URL.format(api_key=api_key)
+    payload = {
+        "system_instruction": {"parts": [{"text": TRANSACTION_SYSTEM_PROMPT}]},
+        "contents": [
+            {"parts": [{"text": json.dumps(transactions, ensure_ascii=False)}]}
+        ],
+        "generationConfig": {
+            "temperature": 0.1,
+            "responseMimeType": "application/json",
+        },
+    }
+
+    try:
+        response = httpx.post(url, json=payload, timeout=300.0)
+        response.raise_for_status()
+        data = response.json()
+        text = data["candidates"][0]["content"]["parts"][0]["text"]
+    except (httpx.HTTPError, KeyError, IndexError, ValueError) as exc:
+        raise GeminiApiError(str(exc)) from exc
+
+    try:
+        parsed = json.loads(text)
+    except (json.JSONDecodeError, TypeError) as exc:
+        raise GeminiResponseParseError(str(exc)) from exc
+
+    if not isinstance(parsed, list):
+        raise GeminiResponseParseError("Expected a JSON array from Gemini.")
+
+    return parsed
+
+
+def _build_transactions_df(df: DataFrame) -> DataFrame:
+    """Add a ``description`` column to the OCR table, one per row.
+
+    The OCR column layout is not fixed, so every non-empty cell in a row is
+    joined together to give Gemini the full row context to classify. Rows whose
+    cells are all empty produce no description and are dropped, while the original
+    OCR columns are kept so the classification can be merged back onto them.
+    """
+    df = df.drop(columns=["__page__"], errors="ignore")
+    descriptions: list[str] = []
+    for _, row in df.iterrows():
+        parts = [str(v).strip() for v in row.tolist() if pd.notna(v) and str(v).strip()]
+        descriptions.append(" | ".join(parts))
+    df = df.assign(description=descriptions)
+    return df[df["description"] != ""].reset_index(drop=True)
+
+
+def analyze_transactions_for_file(
+    session: Session, file: File, user: CurrentUser
+) -> DataFrame:
+    """Classify the transactions held in a file's OCR result.
+
+    Fetches the parsed OCR table from the file job's ``json_url``, builds a
+    transaction description per row and runs them through :func:`analyze_transactions`.
+    The model returns ``{account_code, account_name}`` per transaction in order, so
+    the results are merged back onto the source table by index, yielding a
+    DataFrame with the original OCR columns plus ``description``, ``account_code``
+    and ``account_name``.
+
+    Raises:
+        ValueError: no OCR result / no tables / no transactions to classify.
+        GeminiApiError / GeminiResponseParseError: see :func:`analyze_transactions`.
+    """
+    api_key = get_api_key_by_user(session=session, user_id=user.id)  # type: ignore[call-arg]
+    file_job = get_file_job_by_file_id(session=session, file_id=file.id)
+    if not file_job or not file_job.json_url:
+        raise ValueError("No OCR result available for this file yet.")
+
+    df: DataFrame | None = get_df_from_result_json(file_job.json_url)
+    if df is None:
+        raise ValueError("No tables found in OCR result.")
+
+    tx_df = _build_transactions_df(df)
+    if tx_df.empty:
+        raise ValueError("No transactions found in the file.")
+
+    classified = analyze_transactions(
+        api_key=api_key.key, transactions=tx_df["description"].tolist()
+    )
+
+    # The prompt guarantees one result per transaction, in order. Pair by index
+    # and tolerate any length mismatch by falling back to empty codes.
+    account_codes: list[str] = []
+    account_names: list[str] = []
+    for idx in range(len(tx_df)):
+        item = classified[idx] if idx < len(classified) else {}
+        if not isinstance(item, dict):
+            item = {}
+        account_codes.append(str(item.get("account_code", "")))
+        account_names.append(str(item.get("account_name", "")))
+
+    return tx_df.assign(account_code=account_codes, account_name=account_names)
