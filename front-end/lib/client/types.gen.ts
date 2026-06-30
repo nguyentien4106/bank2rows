@@ -30,19 +30,6 @@ export type Body_login_login_access_token = {
     client_secret?: (string | null);
 };
 
-export type CreatePaymentRequest = {
-    /**
-     * Top-up amount in VND
-     */
-    amount: number;
-};
-
-export type CreatePaymentResponse = {
-    payment_url: string;
-    txn_ref: string;
-    amount: number;
-};
-
 export type CreateSepayPaymentRequest = {
     /**
      * Top-up amount in VND
@@ -153,13 +140,6 @@ export type NewPassword = {
     new_password: string;
 };
 
-export type PaymentReturnResponse = {
-    status: string;
-    txn_ref: string;
-    message: string;
-    code?: (string | null);
-};
-
 export type SepayStatusResponse = {
     txn_ref: string;
     status: TopupStatus;
@@ -196,6 +176,8 @@ export type TopupPackage = {
     id: string;
     amount: number;
     label: string;
+    bonus_percent?: number;
+    bonus_amount?: number;
 };
 
 export type TopupPackagesResponse = {
@@ -469,14 +451,6 @@ export type StoragesGetMyStorageStatResponse = (UserStorageStatPublic);
 
 export type TopupGetTopupPackagesResponse = (TopupPackagesResponse);
 
-export type TopupCreatePaymentData = {
-    requestBody: CreatePaymentRequest;
-};
-
-export type TopupCreatePaymentResponse = (CreatePaymentResponse);
-
-export type TopupTopupReturnResponse = (PaymentReturnResponse);
-
 export type TopupGetMyBalanceResponse = (UserBalancePublic);
 
 export type TopupGetMyTransactionsData = {
@@ -485,8 +459,6 @@ export type TopupGetMyTransactionsData = {
 };
 
 export type TopupGetMyTransactionsResponse = (Array<TopupTransactionPublic>);
-
-export type TopupTopupIpnResponse = (unknown);
 
 export type UsersReadUsersData = {
     limit?: number;

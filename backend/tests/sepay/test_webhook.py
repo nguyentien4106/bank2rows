@@ -50,6 +50,35 @@ def test_webhook_credits_balance_on_match(db: Session) -> None:
     assert get_or_create_balance(db, user.id).balance == start + 50_000
 
 
+def test_webhook_credits_bonus_for_large_topup(db: Session) -> None:
+    user = _make_user(db)
+    start = get_or_create_balance(db, user.id).balance
+    code = _pending_topup(db, user.id, 1_000_000)
+
+    res = handle_webhook(db, _payload(code, 1_000_000))
+
+    assert res.success is True
+    # 1,000,000 top-up earns a 6% bonus -> 60,000 extra credited.
+    assert get_or_create_balance(db, user.id).balance == start + 1_060_000
+    bonus_txn = get_transaction_by_txn_ref(db, f"{code}-BONUS")
+    assert bonus_txn is not None
+    assert bonus_txn.amount == 60_000
+    assert bonus_txn.status == TopupStatus.SUCCESS
+
+
+def test_webhook_bonus_credited_only_once(db: Session) -> None:
+    user = _make_user(db)
+    start = get_or_create_balance(db, user.id).balance
+    code = _pending_topup(db, user.id, 1_000_000)
+
+    handle_webhook(db, _payload(code, 1_000_000))
+    res = handle_webhook(db, _payload(code, 1_000_000))
+
+    assert res.success is True
+    # Duplicate delivery must not double the bonus.
+    assert get_or_create_balance(db, user.id).balance == start + 1_060_000
+
+
 def test_webhook_is_idempotent(db: Session) -> None:
     user = _make_user(db)
     start = get_or_create_balance(db, user.id).balance

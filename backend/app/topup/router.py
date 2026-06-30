@@ -5,7 +5,11 @@ from typing import Any
 from fastapi import APIRouter
 
 from app.auth.dependencies import CurrentUser, SessionDep
-from app.topup.constants import TOPUP_PACKAGES
+from app.topup.constants import (
+    TOPUP_PACKAGES,
+    bonus_for_amount,
+    bonus_percent_for_amount,
+)
 from app.topup.schemas import (
     TopupPackage,
     TopupPackagesResponse,
@@ -19,8 +23,17 @@ router = APIRouter(prefix="/topup", tags=["topup"])
 
 @router.get("/packages", response_model=TopupPackagesResponse)
 def get_topup_packages(_current_user: CurrentUser) -> Any:
-    """Return the list of available top-up packages."""
-    return TopupPackagesResponse(packages=[TopupPackage(**p) for p in TOPUP_PACKAGES])
+    """Return the list of available top-up packages with their loyalty bonus."""
+    return TopupPackagesResponse(
+        packages=[
+            TopupPackage(
+                **p,
+                bonus_percent=bonus_percent_for_amount(p["amount"]),
+                bonus_amount=bonus_for_amount(p["amount"]),
+            )
+            for p in TOPUP_PACKAGES
+        ]
+    )
 
 
 @router.get("/balance", response_model=UserBalancePublic)

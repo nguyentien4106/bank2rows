@@ -182,16 +182,46 @@
     }
   },
   "pages": {
-    "overview": { "title": "Overview", "sub": "Workspace activity at a glance" },
-    "documents": { "title": "Documents", "sub": "Every file you've parsed" },
-    "upload": { "title": "Upload", "sub": "Add documents to the parse queue" },
-    "history": { "title": "History", "sub": "Full job log" },
-    "settings": { "title": "Settings", "sub": "Parsing defaults & API access" },
-    "users": { "title": "Users", "sub": "All people on the platform" },
-    "members": { "title": "Members", "sub": "Workspace members & seats" },
-    "billing": { "title": "Billing", "sub": "Plan, usage & invoices" },
-    "companies": { "title": "Companies", "sub": "Every customer organization" },
-    "profile": { "title": "Profile", "sub": "Your account details" }
+    "overview": {
+      "title": "Overview",
+      "sub": "Workspace activity at a glance"
+    },
+    "documents": {
+      "title": "Documents",
+      "sub": "Every file you've parsed"
+    },
+    "upload": {
+      "title": "Upload",
+      "sub": "Add documents to the parse queue"
+    },
+    "history": {
+      "title": "History",
+      "sub": "Full job log"
+    },
+    "settings": {
+      "title": "Settings",
+      "sub": "Parsing defaults & API access"
+    },
+    "users": {
+      "title": "Users",
+      "sub": "All people on the platform"
+    },
+    "members": {
+      "title": "Members",
+      "sub": "Workspace members & seats"
+    },
+    "billing": {
+      "title": "Billing",
+      "sub": "Plan, usage & invoices"
+    },
+    "companies": {
+      "title": "Companies",
+      "sub": "Every customer organization"
+    },
+    "profile": {
+      "title": "Profile",
+      "sub": "Your account details"
+    }
   },
   "overview": {
     "cardDocuments": "Documents Uploaded",
@@ -361,7 +391,18 @@
     "status_success": "Success",
     "status_pending": "Pending",
     "status_failed": "Failed",
-    "noTransactions": "No transactions yet."
+    "noTransactions": "No transactions yet.",
+    "customAmount": "Custom",
+    "customHint": "Enter your own",
+    "customLabel": "Amount (VND)",
+    "customPlaceholder": "e.g. 100,000",
+    "selectPrompt": "Select an amount to continue.",
+    "minHint": "Minimum top-up is {min}.",
+    "payHint": "You will pay {amount}.",
+    "generateQr": "Generate QR",
+    "bonusBadge": "+{percent}%",
+    "bonusGet": "Get {amount}",
+    "bonusReceive": "→ receive {total} (+{bonus} bonus)"
   },
   "profile": {
     "detailsTitle": "Account details",

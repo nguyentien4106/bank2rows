@@ -20,3 +20,26 @@ TOPUP_PACKAGES: list[TopupPackageDict] = [
 ]
 
 ALLOWED_AMOUNTS: frozenset[int] = frozenset(p["amount"] for p in TOPUP_PACKAGES)
+
+# Loyalty bonus: a percentage of the paid amount is credited *on top* of the
+# top-up. Tiers are (minimum amount in VND, bonus percent), highest first.
+BONUS_TIERS: list[tuple[int, int]] = [
+    (10_000_000, 10),
+    (5_000_000, 8),
+    (2_000_000, 7),
+    (1_000_000, 6),
+    (500_000, 5),
+]
+
+
+def bonus_percent_for_amount(amount: int) -> int:
+    """Return the bonus percentage applied to a top-up of *amount* VND."""
+    for threshold, percent in BONUS_TIERS:
+        if amount >= threshold:
+            return percent
+    return 0
+
+
+def bonus_for_amount(amount: int) -> int:
+    """Return the bonus VND credited on top of a top-up of *amount* VND."""
+    return amount * bonus_percent_for_amount(amount) // 100

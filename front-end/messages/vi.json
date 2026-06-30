@@ -182,16 +182,46 @@
     }
   },
   "pages": {
-    "overview": { "title": "Tổng quan", "sub": "Hoạt động không gian làm việc trong nháy mắt" },
-    "documents": { "title": "Tài liệu", "sub": "Mọi tệp bạn đã phân tích" },
-    "upload": { "title": "Tải lên", "sub": "Thêm tài liệu vào hàng đợi phân tích" },
-    "history": { "title": "Lịch sử", "sub": "Nhật ký công việc đầy đủ" },
-    "settings": { "title": "Cài đặt", "sub": "Mặc định phân tích & truy cập API" },
-    "users": { "title": "Người dùng", "sub": "Tất cả người dùng trên nền tảng" },
-    "members": { "title": "Thành viên", "sub": "Thành viên & chỗ ngồi của không gian" },
-    "billing": { "title": "Thanh toán", "sub": "Gói, mức dùng & hóa đơn" },
-    "companies": { "title": "Công ty", "sub": "Mọi tổ chức khách hàng" },
-    "profile": { "title": "Hồ sơ", "sub": "Thông tin tài khoản của bạn" }
+    "overview": {
+      "title": "Tổng quan",
+      "sub": "Hoạt động không gian làm việc trong nháy mắt"
+    },
+    "documents": {
+      "title": "Tài liệu",
+      "sub": "Mọi tệp bạn đã phân tích"
+    },
+    "upload": {
+      "title": "Tải lên",
+      "sub": "Thêm tài liệu vào hàng đợi phân tích"
+    },
+    "history": {
+      "title": "Lịch sử",
+      "sub": "Nhật ký công việc đầy đủ"
+    },
+    "settings": {
+      "title": "Cài đặt",
+      "sub": "Mặc định phân tích & truy cập API"
+    },
+    "users": {
+      "title": "Người dùng",
+      "sub": "Tất cả người dùng trên nền tảng"
+    },
+    "members": {
+      "title": "Thành viên",
+      "sub": "Thành viên & chỗ ngồi của không gian"
+    },
+    "billing": {
+      "title": "Thanh toán",
+      "sub": "Gói, mức dùng & hóa đơn"
+    },
+    "companies": {
+      "title": "Công ty",
+      "sub": "Mọi tổ chức khách hàng"
+    },
+    "profile": {
+      "title": "Hồ sơ",
+      "sub": "Thông tin tài khoản của bạn"
+    }
   },
   "overview": {
     "cardDocuments": "Tài liệu đã tải lên",
@@ -361,7 +391,18 @@
     "status_success": "Thành công",
     "status_pending": "Đang chờ",
     "status_failed": "Thất bại",
-    "noTransactions": "Chưa có giao dịch nào."
+    "noTransactions": "Chưa có giao dịch nào.",
+    "customAmount": "Tùy chỉnh",
+    "customHint": "Nhập số tiền",
+    "customLabel": "Số tiền (VND)",
+    "customPlaceholder": "vd: 100.000",
+    "selectPrompt": "Chọn số tiền để tiếp tục.",
+    "minHint": "Số tiền nạp tối thiểu là {min}.",
+    "payHint": "Bạn sẽ thanh toán {amount}.",
+    "generateQr": "Tạo mã QR",
+    "bonusBadge": "+{percent}%",
+    "bonusGet": "Nhận {amount}",
+    "bonusReceive": "→ nhận {total} (thưởng +{bonus})"
   },
   "profile": {
     "detailsTitle": "Thông tin tài khoản",

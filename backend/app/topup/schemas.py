@@ -48,6 +48,8 @@ class TopupPackage(BaseModel):
     id: str
     amount: int
     label: str
+    bonus_percent: int = 0
+    bonus_amount: int = 0
 
 
 class TopupPackagesResponse(BaseModel):

@@ -159,40 +159,6 @@ export const Body_login_login_access_tokenSchema = {
     title: 'Body_login-login_access_token'
 } as const;
 
-export const CreatePaymentRequestSchema = {
-    properties: {
-        amount: {
-            type: 'integer',
-            exclusiveMinimum: 0,
-            title: 'Amount',
-            description: 'Top-up amount in VND'
-        }
-    },
-    type: 'object',
-    required: ['amount'],
-    title: 'CreatePaymentRequest'
-} as const;
-
-export const CreatePaymentResponseSchema = {
-    properties: {
-        payment_url: {
-            type: 'string',
-            title: 'Payment Url'
-        },
-        txn_ref: {
-            type: 'string',
-            title: 'Txn Ref'
-        },
-        amount: {
-            type: 'integer',
-            title: 'Amount'
-        }
-    },
-    type: 'object',
-    required: ['payment_url', 'txn_ref', 'amount'],
-    title: 'CreatePaymentResponse'
-} as const;
-
 export const CreateSepayPaymentRequestSchema = {
     properties: {
         amount: {
@@ -697,37 +663,6 @@ export const NewPasswordSchema = {
     title: 'NewPassword'
 } as const;
 
-export const PaymentReturnResponseSchema = {
-    properties: {
-        status: {
-            type: 'string',
-            title: 'Status'
-        },
-        txn_ref: {
-            type: 'string',
-            title: 'Txn Ref'
-        },
-        message: {
-            type: 'string',
-            title: 'Message'
-        },
-        code: {
-            anyOf: [
-                {
-                    type: 'string'
-                },
-                {
-                    type: 'null'
-                }
-            ],
-            title: 'Code'
-        }
-    },
-    type: 'object',
-    required: ['status', 'txn_ref', 'message'],
-    title: 'PaymentReturnResponse'
-} as const;
-
 export const SepayStatusResponseSchema = {
     properties: {
         txn_ref: {
@@ -879,6 +814,16 @@ export const TopupPackageSchema = {
         label: {
             type: 'string',
             title: 'Label'
+        },
+        bonus_percent: {
+            type: 'integer',
+            title: 'Bonus Percent',
+            default: 0
+        },
+        bonus_amount: {
+            type: 'integer',
+            title: 'Bonus Amount',
+            default: 0
         }
     },
     type: 'object',

@@ -23,7 +23,11 @@ from app.sepay.schemas import (
     SepayWebhookResponse,
 )
 from app.topup import crud
-from app.topup.constants import ALLOWED_AMOUNTS
+from app.topup.constants import (
+    ALLOWED_AMOUNTS,
+    bonus_for_amount,
+    bonus_percent_for_amount,
+)
 from app.topup.models import TopupStatus, TopupType
 
 SEPAY_QR_BASE = "https://qr.sepay.vn/img"
@@ -147,10 +151,29 @@ def handle_webhook(
         )
         crud.mark_transaction(session, txn, TopupStatus.SUCCESS)
         crud.apply_balance_change(session, balance, txn.amount, TopupType.CREDIT)
+
+        # Credit the loyalty bonus (if any) as a separate transaction so it
+        # shows up distinctly in the user's history. A suffixed txn_ref keeps
+        # the webhook's code lookup pointing at the original top-up.
+        bonus = bonus_for_amount(int(txn.amount))
+        if bonus > 0:
+            percent = bonus_percent_for_amount(int(txn.amount))
+            crud.create_transaction(
+                session,
+                user_id=txn.user_id,
+                amount=float(bonus),
+                type=TopupType.CREDIT,
+                txn_ref=f"{code}-BONUS",
+                note=f"SePay bonus {percent}% for top-up {code}",
+                status=TopupStatus.SUCCESS,
+            )
+            crud.apply_balance_change(session, balance, float(bonus), TopupType.CREDIT)
+
         session.commit()
         logger.info(
-            "SePay webhook: credited %s VND to user %s (code=%s)",
+            "SePay webhook: credited %s (+%s bonus) VND to user %s (code=%s)",
             txn.amount,
+            bonus,
             txn.user_id,
             code,
         )
